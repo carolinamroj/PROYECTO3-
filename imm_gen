@@ -1,0 +1,50 @@
+module imm_gen (
+    input  logic [31:0] instr,
+    output logic [31:0] imm
+);
+
+    always_comb begin
+        case (instr[6:0]) // Miramos el Opcode (los últimos 7 bits)
+            
+            // --- TIPO I (I-Type) ---
+            // Instrucciones: ADDI, ANDI, ORI, LW, JALR...
+            // El inmediato está en los bits [31:20].
+            // Se extiende el bit de signo (instr[31]) 20 veces a la izquierda.
+            7'b0010011, // Aritmética Inmediata (ADDI, etc.)
+            7'b0000011, // Cargas (LW)
+            7'b1100111: // JALR
+                imm = {{20{instr[31]}}, instr[31:20]};
+
+            // --- TIPO S (S-Type) ---
+            // Instrucciones: SW (Store Word)
+            // El inmediato está partido: bits [31:25] y [11:7].
+            7'b0100011: 
+                imm = {{20{instr[31]}}, instr[31:25], instr[11:7]};
+
+            // --- TIPO B (B-Type) ---
+            // Instrucciones: BEQ, BNE (Branches)
+            // Muy desordenado para optimizar hardware. El bit 0 es siempre 0 (múltiplos de 2).
+            // Orden: bit 12, bits 10:5, bits 4:1, bit 11.
+            7'b1100011: 
+                imm = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0};
+
+            // --- TIPO U (U-Type) ---
+            // Instrucciones: LUI, AUIPC
+            // Carga los 20 bits superiores. Los 12 de abajo son ceros.
+            7'b0110111, // LUI
+            7'b0010111: // AUIPC
+                imm = {instr[31:12], 12'b0};
+
+            // --- TIPO J (J-Type) ---
+            // Instrucciones: JAL (Saltos incondicionales)
+            // También desordenado. Bit 0 siempre 0.
+            7'b1101111: 
+                imm = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:21], 1'b0};
+
+            // Por defecto (seguridad)
+            default: 
+                imm = 32'b0;
+        endcase
+    end
+
+endmodule
