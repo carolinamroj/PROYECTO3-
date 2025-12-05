@@ -1,0 +1,62 @@
+module ALU_control (
+    input  logic [1:0] alu_op,        // Viene del Control Principal
+    input  logic [6:0] funct7,        // instr[31:25]
+    input  logic [2:0] funct3,        // instr[14:12]
+    output logic [4:0] alu_control_out 
+);
+
+    // Códigos coincidentes con tu ALU original (alu.sv)
+    localparam [4:0]
+        ALU_ADD  = 5'b00000,
+        ALU_SUB  = 5'b00001,
+        ALU_SLL  = 5'b00010,
+        ALU_SLT  = 5'b00011,
+        ALU_SLTU = 5'b00100,
+        ALU_XOR  = 5'b00101,
+        ALU_SRL  = 5'b00110,
+        ALU_SRA  = 5'b00111,
+        ALU_OR   = 5'b01000,
+        ALU_AND  = 5'b01001;
+
+    always_comb begin
+        case (alu_op)
+            // LW, SW, LUI, AUIPC -> Suma
+            2'b00: alu_control_out = ALU_ADD;
+
+            // BEQ, BNE -> Resta
+            2'b01: alu_control_out = ALU_SUB;
+
+            // R-Type (ADD, SUB, SLT...)
+            2'b10: begin
+                case (funct3)
+                    3'b000: alu_control_out = (funct7[5]) ? ALU_SUB : ALU_ADD; // ADD vs SUB
+                    3'b001: alu_control_out = ALU_SLL;
+                    3'b010: alu_control_out = ALU_SLT;
+                    3'b011: alu_control_out = ALU_SLTU;
+                    3'b100: alu_control_out = ALU_XOR;
+                    3'b101: alu_control_out = (funct7[5]) ? ALU_SRA : ALU_SRL; // SRL vs SRA
+                    3'b110: alu_control_out = ALU_OR;
+                    3'b111: alu_control_out = ALU_AND;
+                    default: alu_control_out = ALU_ADD;
+                endcase
+            end
+
+            // I-Type (ADDI, ANDI...)
+            2'b11: begin
+                case (funct3)
+                    3'b000: alu_control_out = ALU_ADD; // ADDI (Nunca es resta)
+                    3'b001: alu_control_out = ALU_SLL;
+                    3'b010: alu_control_out = ALU_SLT;
+                    3'b011: alu_control_out = ALU_SLTU;
+                    3'b100: alu_control_out = ALU_XOR;
+                    3'b101: alu_control_out = (funct7[5]) ? ALU_SRA : ALU_SRL; // SRAI check
+                    3'b110: alu_control_out = ALU_OR;
+                    3'b111: alu_control_out = ALU_AND;
+                    default: alu_control_out = ALU_ADD;
+                endcase
+            end
+
+            default: alu_control_out = ALU_ADD;
+        endcase
+    end
+endmodule
