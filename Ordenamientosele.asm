@@ -1,13 +1,13 @@
 .data
 array:  .word 0,0,0,0,0,0,0,0    # array de 8 enteros (el testbench los sobrescribe)
-n:      .word 0                 # tamaño del array (también lo escribe el testbench)
+n:      .word 0                  # tamaño del array (también lo escribe el testbench)
 
 .text
 .globl _start
 _start:
 
         # ----- cargar n -----
-        la   x5, n              # x5 = &n
+        la   x5, n              # x5 = &n (Dirección 32)
         lw   x1, 0(x5)          # x1 = n
 
         # ----- inicializar i -----
@@ -79,8 +79,5 @@ next_outer:
         j    outer_loop         # repetir outer loop
 
 end_program:
-        xori x10, x0, 10        # código 10 = EXIT en Venus
-        ecall                   # terminar ejecución
-end_program:
-        xori x10, x0, 10
-        ecall
+        xori x10, x0, 10        # Código de salida
+        j    end_program
