@@ -1,0 +1,42 @@
+module Control (
+    input logic [6:0] Instruction,
+    output logic Branch,
+    output logic MemRead, 
+    output logic MemtoReg,
+    output logic [1:0] ALUOp,
+    output logic MemWrite,
+    output logic ALUSrc,
+    output logic RegWrite,
+    output logic AuipcLui,
+    output logic Jump // <--- ESTO FALTA EN TU CÓDIGO ACTUAL
+    );
+    
+    localparam [6:0] R_TYPE = 7'b0110011,
+                     I_TYPE = 7'b0010011,
+                     LOAD   = 7'b0000011,
+                     STORE  = 7'b0100011,
+                     BRANCH = 7'b1100011,
+                     LUI    = 7'b0110111,
+                     AUIPC  = 7'b0010111,
+                     JAL    = 7'b1101111; // <--- ESTO FALTA
+    
+    always_comb begin
+        {Branch, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite, AuipcLui, Jump} = 8'b0;
+        ALUOp = 2'b00;
+    
+        case (Instruction)
+            R_TYPE: begin ALUOp = 2'b10; RegWrite = 1'b1; end
+            I_TYPE: begin ALUOp = 2'b11; ALUSrc = 1'b1; RegWrite = 1'b1; end // ADDI usa 11
+            LOAD:   begin RegWrite = 1'b1; ALUSrc = 1'b1; MemtoReg = 1'b1; MemRead = 1'b1; ALUOp = 2'b00; end
+            STORE:  begin ALUSrc = 1'b1; MemWrite = 1'b1; ALUOp = 2'b00; end
+            BRANCH: begin Branch = 1'b1; ALUOp = 2'b01; end
+            LUI:    begin RegWrite = 1'b1; ALUSrc = 1'b1; AuipcLui = 1'b1; ALUOp = 2'b00; end
+            AUIPC:  begin RegWrite = 1'b1; ALUSrc = 1'b1; AuipcLui = 1'b1; ALUOp = 2'b00; end
+            
+            // EL JAL ES OBLIGATORIO PARA QUE EL PROGRAMA NO SE ESTRELLE
+            JAL:    begin Jump = 1'b1; RegWrite = 1'b1; end 
+            
+            default: begin end
+        endcase
+    end
+endmodule
