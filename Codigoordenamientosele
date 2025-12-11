@@ -1,0 +1,83 @@
+.data
+array:  .word 0,0,0,0,0,0,0,0    # 8 enteros modificables por testbench
+n:      .word 0                 # tamaño del array (lo escribe el testbench)
+
+.text
+.globl _start
+_start:
+
+        # cargar n en x1
+        la   x5, n
+        lw   x1, 0(x5)
+
+        # i = 0
+        add  x2, x0, x0
+
+        # constantes
+        xori x12, x0, 1         # x12 = 1
+        xori x13, x0, 2         # x13 = 2 (para <<2)
+
+outer_loop:
+        # if i >= n -> fin
+        slt  x5, x1, x2
+        beq  x5, x12, end_program
+
+        # min_index = i
+        add  x3, x2, x0
+
+        # j = i+1
+        add  x4, x2, x12
+
+inner_loop:
+        # if j >= n -> swap
+        slt  x5, x1, x4
+        beq  x5, x12, swap_elements
+
+        # array[j]
+        sll  x5, x4, x13
+        la   x6, array
+        add  x5, x5, x6
+        lw   x7, 0(x5)
+
+        # array[min_index]
+        sll  x8, x3, x13
+        la   x9, array
+        add  x8, x8, x9
+        lw   x10, 0(x8)
+
+        # si array[j] < array[min_index]
+        slt  x11, x7, x10
+        beq  x11, x0, inner_continue
+        add  x3, x4, x0
+
+inner_continue:
+        add  x4, x4, x12
+        j    inner_loop
+
+swap_elements:
+        # si i == min_index -> continuar
+        beq  x2, x3, next_outer
+
+        # array[i]
+        sll  x5, x2, x13
+        la   x6, array
+        add  x5, x5, x6
+        lw   x7, 0(x5)
+
+        # array[min_index]
+        sll  x8, x3, x13
+        la   x9, array
+        add  x8, x8, x9
+        lw   x10, 0(x8)
+
+        # swap
+        sw   x10, 0(x5)
+        sw   x7,  0(x8)
+
+next_outer:
+        add  x2, x2, x12
+        j    outer_loop
+
+end_program:
+        xori x10, x0, 10
+        ecall
