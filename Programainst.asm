@@ -1,52 +1,52 @@
 .data
-input:      .word 0        # valor que pondrá el testbench
-shift_val:  .word 0        # cantidad de desplazamiento
+input:      .word 0
+shift_val:  .word 0
 
-result1:    .word 0        # resultado SRLI
-result2:    .word 0        # resultado SRAI
-result3:    .word 0        # resultado SRL
-result4:    .word 0        # resultado SRA
-result5:    .word 0        # resultado SUB
-result6:    .word 0        # resultado SLTIU
-result7:    .word 0        # resultado LUI
+result1:    .word 0
+result2:    .word 0
+result3:    .word 0
+result4:    .word 0
+result5:    .word 0
+result6:    .word 0
+result7:    .word 0
 
 .text
 .globl _start
 _start:
 
-la   x5, input          # x5 = dirección de input
-lw   x6, 0(x5)          # x6 = cargar valor de input
+la   x5, input
+lw   x6, 0(x5)
 
-la   x5, shift_val      # x5 = dirección de shift_val
-lw   x9, 0(x5)          # x9 = cargar valor de shift_val
+la   x5, shift_val
+lw   x9, 0(x5)
 
-srli x7, x6, 1          # result1 = input >> 1 lógico (pone ceros a la izquierda)
+srli x7, x6, 1
 la   x5, result1
-sw   x7, 0(x5)          # guardar resultado SRLI en memoria
+sw   x7, 0(x5)
 
-srai x7, x6, 1          # result2 = input >> 1 aritmético (mantiene signo)
+srai x7, x6, 1
 la   x5, result2
-sw   x7, 0(x5)          # guardar resultado SRAI
+sw   x7, 0(x5)
 
-srl  x7, x6, x9         # result3 = input >> shift_val lógico (pone ceros a la izquierda)
+srl  x7, x6, x9
 la   x5, result3
-sw   x7, 0(x5)          # guardar resultado SRL
+sw   x7, 0(x5)
 
-sra  x7, x6, x9         # result4 = input >> shift_val aritmético (mantiene signo)
+sra  x7, x6, x9
 la   x5, result4
-sw   x7, 0(x5)          # guardar resultado SRA
+sw   x7, 0(x5)
 
-sub  x7, x6, x9         # result5 = input - shift_val (resta)
+sub  x7, x6, x9
 la   x5, result5
-sw   x7, 0(x5)          # guardar resultado SUB
+sw   x7, 0(x5)
 
-sltiu x7, x6, 128       # result6 = 1 si input < 128 (unsigned), 0 si >= 128
+sltiu x7, x6, 128
 la   x5, result6
-sw   x7, 0(x5)          # guardar resultado SLTIU
+sw   x7, 0(x5)
 
-lui  x7, 0xABCDE        # result7 = 0xABCDE000 (carga 20 bits más significativos)
+lui  x7, 0xABCDE
 la   x5, result7
-sw   x7, 0(x5)          # guardar resultado LUI
+sw   x7, 0(x5)
 
-addi x10, x0, 10        # código de salida 10 para ecall
-ecall                   # terminar programa
+end_loop:
+    j end_loop          # Salta incondicionalmente a la etiqueta 'end_loop'
