@@ -15,7 +15,7 @@ main:
 
     # Si N < 1 → END
     slti x9, x1, 1
-    bne  x9, x0, END
+    bne  x9, x0, END #compara x9(0 o 1) con 0
 
     # fibs[0] = 0
     andi x4, x0, 0 #f[0]=0
