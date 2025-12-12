@@ -1,0 +1,9 @@
+0000001D  // Dato 0 (29) - Mem[0]
+0000000A  // Dato 1 (10) - Mem[1]
+0000000E  // Dato 2 (14) - Mem[2]
+00000025  // Dato 3 (37) - Mem[3]
+0000000D  // Dato 4 (13) - Mem[4]
+00000005  // Dato 5 (5)  - Mem[5]
+00000002  // Dato 6 (2)  - Mem[6]
+00000014  // Dato 7 (20) - Mem[7]
+00000008  // TAMAÑO N=8 (Mem[8]) - El código lo busca aquí (offset 32)
