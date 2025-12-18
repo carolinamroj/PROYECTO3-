@@ -1,0 +1,89 @@
+.data
+array:  .word 0,0,0,0,0,0,0,0    # array de 8 enteros (el testbench los sobrescribe)
+n:      .word 0                  # tamaño del array (también lo escribe el testbench)
+
+.text
+.globl _start
+_start:
+
+        # ----- cargar n -----
+        la   x5, n              # x5 = &n (Dirección 32)
+        lw   x1, 0(x5)          # x1 = n
+        nop
+        
+        # ----- inicializar i -----
+        add  x2, x0, x0         # x2 = i = 0
+
+        # ----- constantes -----
+        xori x12, x0, 1         # x12 = 1 (incrementos)
+        xori x13, x0, 2         # x13 = 2 (para desplazar << 2)
+
+outer_loop:
+        # ----- if (i >= n) salir -----
+        slt  x5, x1, x2         # x5 = 1 si n < i (i >= n)
+        beq  x5, x12, end_program
+        nop
+
+        # ----- min_index = i -----
+        add  x3, x2, x0         # x3 = min_index
+
+        # ----- j = i + 1 -----
+        add  x4, x2, x12        # x4 = j = i + 1
+
+inner_loop:
+        # ----- if (j >= n) ir a swap -----
+        slt  x5, x1, x4         # x5 = 1 si n < j (j >= n)
+        beq  x5, x12, swap_elements
+        nop
+
+        # ----- cargar array[j] -----
+        sll  x5, x4, x13        # x5 = j * 4 (offset)
+        la   x6, array          # x6 = &array
+        add  x5, x5, x6         # x5 = &array[j]
+        lw   x7, 0(x5)          # x7 = array[j]
+
+        # ----- cargar array[min_index] -----
+        sll  x8, x3, x13        # x8 = min_index * 4
+        la   x9, array          # x9 = &array
+        add  x8, x8, x9         # x8 = &array[min_index]
+        lw   x10, 0(x8)         # x10 = array[min_index]
+        nop
+
+        # ----- comparar array[j] < array[min_index] -----
+        slt  x11, x7, x10       # x11 = 1 si array[j] < array[min_index]
+        beq  x11, x0, inner_continue
+        add  x3, x4, x0         # min_index = j
+
+inner_continue:
+        add  x4, x4, x12        # j++
+        j    inner_loop         # repetir
+
+swap_elements:
+        # ----- si i == min_index, no swap -----
+        beq  x2, x3, next_outer
+        nop
+
+        # ----- cargar array[i] -----
+        sll  x5, x2, x13        # x5 = i * 4
+        la   x6, array          # x6 = &array
+        add  x5, x5, x6         # x5 = &array[i]
+        lw   x7, 0(x5)          # x7 = array[i]
+
+        # ----- cargar array[min_index] -----
+        sll  x8, x3, x13        # x8 = min_index * 4
+        la   x9, array          # x9 = &array
+        add  x8, x8, x9         # x8 = &array[min_index]
+        lw   x10, 0(x8)         # x10 = array[min_index]
+        nop
+
+        # ----- swap -----
+        sw   x10, 0(x5)         # array[i] = array[min_index]
+        sw   x7,  0(x8)         # array[min_index] = array[i]
+
+next_outer:
+        add  x2, x2, x12        # i++
+        j    outer_loop         # repetir outer loop
+
+end_program:
+        xori x10, x0, 10        # Código de salida
+        j    end_program
