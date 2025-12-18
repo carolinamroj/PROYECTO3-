@@ -3,59 +3,62 @@
 main:
 
     # Cargar dirección de N con AUIPC+ADDI
-    auipc x2, 0 #genera la base
-    addi  x2, x2, 16 #offset de 16(4 mas que antes por la isntruccion nop)
+    auipc x2, 0              # genera la base (PC)
+    addi  x2, x2, 136        # offset de 136 bytes hasta .data (incluye nops)
     lw    x1, 0(x2)          # x1 = N
-	nop #añadimos nop
-    
+    nop                     # evita hazard load-use
+
     # Cargar dirección de fibs
-    auipc x2, 0
-    addi  x2, x2, 20 #offset de 20 por el nop. x2 apunta al inicio 
+    auipc x2, 0              # genera la base (PC)
+    addi  x2, x2, 124        # offset de 124 bytes hasta fibs (N + 4)
 
     addi x3, x0, 0           # i = 0
 
     # Si N < 1 → END
     slti x9, x1, 1
-    bne  x9, x0, END #compara x9(0 o 1) con 0
+    nop                     # evita hazard ALU → branch
+    bne  x9, x0, END         # compara x9 (0 o 1) con 0
 
     # fibs[0] = 0
-    andi x4, x0, 0 #f[0]=0
-    sw   x4, 0(x2) #guarda 0 en fibs
-    addi x3, x3, 1 #incrementa i a 1
+    andi x4, x0, 0           # f[0] = 0
+    sw   x4, 0(x2)           # guarda 0 en fibs[0]
+    addi x3, x3, 1           # incrementa i a 1
 
     # Si i == N → END
-    xor  x10, x3, x1 #compara si i=N
-    beq  x10, x0, END #si lo es salta a end
+    xor  x10, x3, x1         # compara si i == N
+    nop                     # evita hazard ALU → branch
+    beq  x10, x0, END        # si lo es salta a END
 
     # fibs[1] = 1
-    ori  x5, x0, 1 
-    sw   x5, 4(x2) #se guarda 1 en fibs[1]
-    addi x3, x3, 1 #incrementamos a 2
-    
-	#inicializamos f[i-2] y f[i-1]
-    add x4, x0, x0 # x4 = f[i-2] = 0
-    add x5, x0, x5 # x5 = f[i-1] = 1
-    
+    ori  x5, x0, 1
+    sw   x5, 4(x2)           # se guarda 1 en fibs[1]
+    addi x3, x3, 1           # incrementamos i a 2
+
+    # inicializamos f[i-2] y f[i-1]
+    add x4, x0, x0           # x4 = f[i-2] = 0
+    add x5, x0, x5           # x5 = f[i-1] = 1
 
 LOOP:
     # Si N < i → END
-    sltu x9, x1, x3 #compara i> N
-    bne  x9, x0, END #si es asi salta a end
+    sltu x9, x1, x3          # compara i > N
+    nop                     # evita hazard ALU → branch
+    bne  x9, x0, END         # si es así salta a END
 
     # f[i] = f[i-2] + f[i-1]
     add  x6, x4, x5
 
-    # offset = i*4
+    # offset = i * 4
     slli x7, x3, 2
-    add  x8, x2, x7 #dirección donde guardar f[i]
-    sw   x6, 0(x8) #guarda en memoria
+    add  x8, x2, x7          # dirección donde guardar f[i]
+    sw   x6, 0(x8)           # guarda en memoria
 
     # actualizar f[i-2] y f[i-1]
     or   x4, x0, x5
     and  x5, x6, x6
 
-	#incrementar i
+    # incrementar i
     addi x3, x3, 1
+    nop                     # evita hazard de control
     j LOOP
 
 END:
