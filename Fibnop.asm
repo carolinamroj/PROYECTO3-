@@ -16,8 +16,8 @@ main:
 
     # Si N < 1 → END
     slti x9, x1, 1
-    nop                     # evita hazard ALU → branch
     bne  x9, x0, END         # compara x9 (0 o 1) con 0
+    nop                     # evita hazard ALU → branch
 
     # fibs[0] = 0
     andi x4, x0, 0           # f[0] = 0
@@ -26,8 +26,8 @@ main:
 
     # Si i == N → END
     xor  x10, x3, x1         # compara si i == N
-    nop                     # evita hazard ALU → branch
     beq  x10, x0, END        # si lo es salta a END
+    nop                     # evita hazard ALU → branch
 
     # fibs[1] = 1
     ori  x5, x0, 1
@@ -41,8 +41,8 @@ main:
 LOOP:
     # Si N < i → END
     sltu x9, x1, x3          # compara i > N
-    nop                     # evita hazard ALU → branch
     bne  x9, x0, END         # si es así salta a END
+     nop                     # evita hazard ALU → branch
 
     # f[i] = f[i-2] + f[i-1]
     add  x6, x4, x5
@@ -58,8 +58,8 @@ LOOP:
 
     # incrementar i
     addi x3, x3, 1
-    nop                     # evita hazard de control
     j LOOP
+    nop                     # evita hazard de control
 
 END:
     j END
