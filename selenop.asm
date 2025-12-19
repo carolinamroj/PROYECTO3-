@@ -21,6 +21,7 @@ _start:
 outer_loop:
         # ----- if (i >= n) salir -----
         slt  x5, x1, x2         # x5 = 1 si n < i (i >= n)
+        nop
         beq  x5, x12, end_program
         nop                     # control hazard
 
@@ -33,6 +34,7 @@ outer_loop:
 inner_loop:
         # ----- if (j >= n) ir a swap -----
         slt  x5, x1, x4         # x5 = 1 si n < j (j >= n)
+        nop
         beq  x5, x12, swap_elements
         nop                     # control hazard
 
@@ -52,7 +54,9 @@ inner_loop:
 
         # ----- comparar array[j] < array[min_index] -----
         slt  x11, x7, x10       # x11 = 1 si array[j] < array[min_index]
+        nop
         beq  x11, x0, inner_continue
+        nop
         add  x3, x4, x0         # min_index = j
 
 inner_continue:
