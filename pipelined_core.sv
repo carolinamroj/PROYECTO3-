@@ -1,255 +1,234 @@
+module pipelined_core (
+    input logic clk, reset,
+    input logic [31:0] idata,
+    input logic [31:0] ddata_r,
+    output logic [31:0] iaddr,
+    output logic [31:0] daddr,
+    output logic [31:0] ddata_w,
+    output logic reg_write_en,
+    output logic d_w,
+    output logic d_r
+);
 
- module pipelined_core (
-	input  logic        clk,
-	input  logic        reset,
-	input  logic [31:0] idata,
-	input  logic [31:0] ddata_r,
-	output logic [31:0] iaddr,
-	output logic [31:0] daddr,
-	output logic [31:0] ddata_w,
-	output logic        reg_write_en,
-	output logic        d_w,
-	output logic        d_r
-	);
-	
-	logic [31:0] out_pc, pc_next, sum1, sum2;
-	logic Branch, MemRead, MemtoReg, MemWrite, RegWrite, ALUSrc, Jump, Jalr;
-	logic [1:0] ALUOp, AuipcLui;
-	logic [2:0] funct3;
-	
-	logic [31:0] IF_ID_pc, IF_ID_instruction;
-	
-	logic [31:0] ID_out_gen, ID_ReadData1, ID_ReadData2, WB_out_mux4, pc_jalr, ID_EX_out_gen, ID_EX_ReadData1, ID_EX_ReadData2, ID_EX_pc;
-	logic [6:0] ID_EX_funct7;
-	logic [4:0] WB_WriteRegister, ID_EX_rd, ID_EX_rs1, ID_EX_rs2;
-	logic [2:0] ID_EX_funct3;
-	logic [1:0] ID_EX_ALUOp, ID_EX_AuipcLui;
-	logic WB_RegWrite, branch_taken, ID_EX_MemRead, ID_EX_MemtoReg, ID_EX_MemWrite, ID_EX_ALUSrc, ID_EX_RegWrite;
-	
-	logic [31:0] EX_out_mux2, EX_out_mux3, EX_alu_result, EX_MEM_alu_result, EX_MEM_ReadData2;
-	logic [4:0] EX_alu_control, EX_MEM_rd;
-	logic EX_zero, EX_MEM_MemRead, EX_MEM_MemtoReg, EX_MEM_MemWrite, EX_MEM_RegWrite;
-	
-	logic [31:0] MEM_WB_alu_result, MEM_WB_ddata_r;
-	logic [4:0] MEM_WB_rd;
-	logic MEM_WB_MemtoReg, MEM_WB_RegWrite;
-	 
+    
+    // -- Etapa IF --
+    logic [31:0] pc_next, pc_current;
+    logic [31:0] pc_plus_4;
+    
+    // -- Etapa ID --
+    logic [31:0] id_pc, id_instr;
+    logic [31:0] read_data1, read_data2, imm_gen_out;
+    logic [31:0] branch_target; 
+    logic branch_taken;
+    
+    // Control en ID
+    logic ctrl_Branch, ctrl_MemRead, ctrl_MemtoReg, ctrl_MemWrite, ctrl_ALUSrc, ctrl_RegWrite, ctrl_Jump, ctrl_Jalr;
+    logic [1:0] ctrl_ALUOp, ctrl_AuipcLui;
+
+    // -- Etapa EX --
+    logic [31:0] ex_pc, ex_imm, ex_read_data1, ex_read_data2;
+    logic [4:0]  ex_rd; 
+    logic [31:0] alu_in_a, alu_in_b, alu_result;
+    logic [4:0]  alu_ctrl;
+    logic        alu_zero;
+    
+    // Control en EX
+    logic ex_MemRead, ex_MemtoReg, ex_MemWrite, ex_ALUSrc, ex_RegWrite;
+    logic [1:0] ex_ALUOp, ex_AuipcLui;
+    logic [2:0] ex_funct3;
+    logic [6:0] ex_funct7;
+
+    // -- Etapa MEM --
+    logic [31:0] mem_alu_result, mem_write_data;
+    logic [4:0]  mem_rd;
+    logic mem_RegWrite, mem_MemtoReg, mem_MemRead, mem_MemWrite;
+
+    // -- Etapa WB --
+    logic [31:0] wb_read_data, wb_alu_result;
+    logic [4:0]  wb_rd;
+    logic wb_RegWrite, wb_MemtoReg;
+    logic [31:0] wb_final_data; 
+
 		// Etapa IF
-	always_ff @(posedge clk or negedge reset)
-		begin
-			if(!reset) out_pc <= 32'b0;
-			else out_pc <= pc_next;
-		end
+    assign iaddr = pc_current;
+    assign pc_plus_4 = pc_current + 32'd4;
+
+    // Lógica del PC (Prioridad: Saltos > PC+4)
+    always_comb begin
+        if (branch_taken)      pc_next = branch_target;           // Salto Condicional (BEQ...)
+        else if (ctrl_Jump)    pc_next = id_pc + imm_gen_out;     // JAL
+        else if (ctrl_Jalr)    pc_next = (read_data1 + imm_gen_out) & 32'hFFFFFFFE; // JALR
+        else                   pc_next = pc_plus_4;
+    end
+
+    always_ff @(posedge clk or negedge reset) begin
+        if (!reset) pc_current <= 32'b0;
+        else        pc_current <= pc_next;
+    end
+
+    // Registro IF / ID
+    always_ff @(posedge clk or negedge reset) begin
+        if (!reset) begin
+            id_pc    <= 32'b0;
+            id_instr <= 32'h00000013; // NOP
+        end else begin
+            // FLUSH: Si hay salto, matamos la instrucción que viene detrás convirtiéndola en NOP
+            if (branch_taken || ctrl_Jump || ctrl_Jalr) begin
+                id_pc    <= 32'b0;
+                id_instr <= 32'h00000013; // Inyectar NOP
+            end else begin
+                id_pc    <= pc_current;
+                id_instr <= idata;
+            end
+        end
+    end
+
+		// Etapa ID (DECODE)
+    register register_inst (
+        .CLK(clk),
+        .RESET_N(reset),
+        .RegWrite(wb_RegWrite),
+        .ReadRegister1(id_instr[19:15]),
+        .ReadRegister2(id_instr[24:20]),
+        .WriteRegister(wb_rd),
+        .WriteData(wb_final_data),
+        .ReadData1(read_data1),
+        .ReadData2(read_data2)
+    );
+
+    imm_gen imm_gen_inst (
+        .instr(id_instr),
+        .imm(imm_gen_out)
+    );
+
+    Control control_inst (
+        .Instruction(id_instr[6:0]),
+        .Branch(ctrl_Branch),
+        .MemRead(ctrl_MemRead),
+        .MemtoReg(ctrl_MemtoReg),
+        .ALUOp(ctrl_ALUOp),
+        .MemWrite(ctrl_MemWrite),
+        .ALUSrc(ctrl_ALUSrc),
+        .RegWrite(ctrl_RegWrite),
+        .AuipcLui(ctrl_AuipcLui),
+        .Jump(ctrl_Jump),
+        .Jalr(ctrl_Jalr)
+    );
+
+    assign branch_target = id_pc + imm_gen_out;
+
+    always_comb begin
+        branch_taken = 1'b0;
+        if (ctrl_Branch) begin
+            case (id_instr[14:12]) 
+                3'b000: branch_taken = (read_data1 == read_data2); // BEQ
+                3'b001: branch_taken = (read_data1 != read_data2); // BNE
+                3'b100: branch_taken = ($signed(read_data1) < $signed(read_data2)); // BLT
+                3'b101: branch_taken = ($signed(read_data1) >= $signed(read_data2)); // BGE
+                3'b110: branch_taken = (read_data1 < read_data2); // BLTU
+                3'b111: branch_taken = (read_data1 >= read_data2); // BGEU
+                default: branch_taken = 1'b0;
+            endcase
+        end
+    end
+
+    // Registro ID / EX
+    always_ff @(posedge clk or negedge reset) begin
+        if (!reset) begin
+            ex_MemRead <= 0; ex_MemtoReg <= 0; ex_MemWrite <= 0;
+            ex_ALUSrc <= 0; ex_RegWrite <= 0; ex_ALUOp <= 0; ex_AuipcLui <= 0;
+            ex_pc <= 0; ex_imm <= 0; ex_read_data1 <= 0; ex_read_data2 <= 0; ex_rd <= 0;
+            ex_funct3 <= 0; ex_funct7 <= 0;
+        end else begin
+            if (branch_taken || ctrl_Jump || ctrl_Jalr) begin
+                 ex_RegWrite <= 0; ex_MemWrite <= 0; ex_MemRead <= 0; // Señales peligrosas a 0
+            end else begin
+                ex_MemRead  <= ctrl_MemRead;
+                ex_MemtoReg <= ctrl_MemtoReg;
+                ex_MemWrite <= ctrl_MemWrite;
+                ex_ALUSrc   <= ctrl_ALUSrc;
+                ex_RegWrite <= ctrl_RegWrite;
+                ex_ALUOp    <= ctrl_ALUOp;
+                ex_AuipcLui <= ctrl_AuipcLui;
+                
+                ex_pc         <= id_pc;
+                ex_imm        <= imm_gen_out;
+                ex_read_data1 <= read_data1;
+                ex_read_data2 <= read_data2;
+                ex_rd         <= id_instr[11:7];
+                ex_funct3     <= id_instr[14:12];
+                ex_funct7     <= id_instr[31:25];
+            end
+        end
+    end
 		
-	assign iaddr = out_pc 
-	assign sum1 = out_pc + 32'd4;
-	
-	always_ff @(posedge clk or negedge reset)
-		begin
-			if (!reset)
-				begin
-					IF_ID_pc <= 32'b0;
-					IF_ID_instruction <= 32'b0;
-				end
-			else
-				begin
-					IF_ID_pc <= out_pc;
-					IF_ID_instruction <= idata;
-				end
-		end
-		
-		// Etapa ID
-	assign funct3 = IF_ID_instruction[14:12];
-	
-	Control control_inst (
-	.Instruction(idata[6:0]),
-	.Branch(Branch),
-	.MemRead(MemRead),
-	.MemtoReg(MemtoReg),
-	.ALUOp(ALUOp),
-	.MemWrite(MemWrite),
-	.ALUSrc(ALUSrc),
-	.RegWrite(RegWrite),
-	.AuipcLui(AuipcLui),
-	.Jump(Jump),
-	.Jalr(Jalr)
-	);
-	
-	imm_gen imm_gen_inst (
-	.instr(IF_ID_instruction),
-	.imm(ID_out_gen)
-	);
-	
-	register register_inst (
-	.CLK(clk),
-	.RESET_N(reset),
-	.RegWrite(WB_RegWrite),
-	.ReadRegister1(IF_ID_instruction[19:15]),
-	.ReadRegister2(IF_ID_instruction[24:20]),
-	.WriteRegister(WB_WriteRegister),
-	.WriteData(WB_out_mux4),
-	.ReadData1(ID_ReadData1),
-	.ReadData2(ID_ReadData2)
-	);
-	
-	assign sum2 = IF_ID_pc + ID_out_gen;
-	assign pc_jalr = (ID_ReadData1 + ID_out_gen) & 32'hFFFFFFFE;
-	
-	always_comb
-		begin
-			branch_taken = 1'b0;
-			if (Branch)
-				begin
-					case (funct3)
-						3'b000: branch_taken = (ID_ReadData1 == ID_ReadData2); // BEQ
-						3'b001: branch_taken = (ID_ReadData1 != ID_ReadData2); // BNE
-						3'b100: branch_taken = ($signed(ID_ReadData1) < $signed(ID_ReadData2)); // BLT
-						3'b101: branch_taken = ($signed(ID_ReadData1) >= $signed(ID_ReadData2)); // BGE
-						3'b110: branch_taken = (ID_ReadData1 < ID_ReadData2); // BLTU
-						3'b111: branch_taken = (ID_ReadData1 >= ID_ReadData2); // BGEU
-						default: branch_taken = 1'b0;
-					endcase
-				end
-		end
-	
-	always_comb 
-		begin
-			case({Jalr, Jump, branch_taken})
-				3'b100, 3'b101, 3'b110, 3'b111: pc_next = pc_jalr;  // Jalr tiene prioridad
-				3'b010, 3'b011:                 pc_next = sum2;     // Jump
-				3'b001:                         pc_next = sum2;     // Branch
-				default:                        pc_next = sum1;     // PC+4
-			endcase
-		end
-		
-	always_ff @posedge clk or negedge reset)
-		begin
-			if (!reset)
-				begin
-					ID_EX_out_gen    <= 32'b0;
-					ID_EX_ReadData1  <= 32'b0;
-					ID_EX_ReadData2  <= 32'b0;
-					ID_EX_pc         <= 32'b0;
-					ID_EX_rd         <= 5'b0;
-					ID_EX_rs1        <= 5'b0;
-					ID_EX_rs2        <= 5'b0;
-					ID_EX_funct3     <= 3'b0;
-					ID_EX_funct7     <= 7'b0;
-					
-					ID_EX_MemRead    <= 1'b0;
-					ID_EX_MemtoReg   <= 1'b0;
-					ID_EX_MemWrite   <= 1'b0;
-					ID_EX_ALUSrc     <= 1'b0;
-					ID_EX_RegWrite   <= 1'b0;
-					ID_EX_ALUOp      <= 2'b0;
-					ID_EX_AuipcLui   <= 2'b0;
-				end
-			else
-				begin
-					ID_EX_out_gen    <= ID_out_gen;
-					ID_EX_ReadData1  <= ID_ReadData1;
-					ID_EX_ReadData2  <= ID_ReadData2;
-					ID_EX_pc         <= IF_ID_pc;
-					ID_EX_rd         <= IF_ID_instruction[11:7];
-					ID_EX_rs1        <= IF_ID_instruction[19:15];
-					ID_EX_rs2        <= IF_ID_instruction[24:20];
-					ID_EX_funct3     <= funct3;
-					ID_EX_funct7     <= IF_ID_instruction[31:25];
-					
-					ID_EX_MemRead    <= MemRead;
-					ID_EX_MemtoReg   <= MemtoReg;
-					ID_EX_MemWrite   <= MemWrite;
-					ID_EX_ALUSrc     <= ALUSrc;
-					ID_EX_RegWrite   <= RegWrite;
-					ID_EX_ALUOp      <= ALUOp;
-					ID_EX_AuipcLui   <= AuipcLui;
-				end
-		end
-		
-		// Etapa EX
-	always_comb 
-		begin
-			if (ID_EX_AuipcLui == 2'b01) EX_out_mux2 = 32'b0; // LUI
-			else if (ID_EX_AuipcLui == 2'b10) EX_out_mux2 = ID_EX_pc; // AUIPC
-			else EX_out_mux2 = ID_EX_ReadData1; // Normal
-		end
-		
-	assign EX_out_mux3 = ID_EX_ALUSrc ? ID_EX_out_gen : ID_EX_ReadData2;
-	
-	ALU_control alu_control_inst (
-	.alu_op(ID_EX_ALUOp),
-	.funct7(ID_EX_funct7),
-	.funct3(ID_EX_funct3),
-	.alu_control_out(EX_alu_control)
-	);
-	
-	alu alu_inst (
-	.src_a(EX_out_mux2),
-	.src_b(EX_out_mux3),
-	.alu_control(EX_alu_control),
-	.alu_result(EX_alu_result),
-	.zero(EX_zero)
-	);
-	
-	always_ff @(posedge clk or negedge reset) 
-		begin
-			if (!reset) 
-				begin
-					EX_MEM_alu_result <= 32'b0;
-					EX_MEM_ReadData2  <= 32'b0;
-					EX_MEM_rd         <= 5'b0;
+		// Etapa EX 
+    ALU_control alu_control_inst (
+        .alu_op(ex_ALUOp),
+        .funct7(ex_funct7),
+        .funct3(ex_funct3),
+        .alu_control_out(alu_ctrl)
+    );
+
+    // Mux entrada A
+    always_comb begin
+        if (ex_AuipcLui == 2'b01)      alu_in_a = 32'b0;  // LUI
+        else if (ex_AuipcLui == 2'b10) alu_in_a = ex_pc;  // AUIPC
+        else                           alu_in_a = ex_read_data1;
+    end
+
+    // Mux entrada B 
+    assign alu_in_b = (ex_ALUSrc) ? ex_imm : ex_read_data2;
+
+    alu alu_inst (
+        .src_a(alu_in_a),
+        .src_b(alu_in_b),
+        .alu_control(alu_ctrl),
+        .alu_result(alu_result),
+        .zero(alu_zero)
+    );
+
+    // registro EX / MEM 
+    always_ff @(posedge clk or negedge reset) begin
+        if (!reset) begin
+            mem_RegWrite <= 0; mem_MemtoReg <= 0; mem_MemRead <= 0; mem_MemWrite <= 0;
+            mem_alu_result <= 0; mem_write_data <= 0; mem_rd <= 0;
+        end else begin
+            mem_RegWrite  <= ex_RegWrite;
+            mem_MemtoReg  <= ex_MemtoReg;
+            mem_MemRead   <= ex_MemRead;
+            mem_MemWrite  <= ex_MemWrite;
             
-					EX_MEM_MemRead    <= 1'b0;
-					EX_MEM_MemtoReg   <= 1'b0;
-					EX_MEM_MemWrite   <= 1'b0;
-					EX_MEM_RegWrite   <= 1'b0;
-				end 
-			else 
-				begin
-					EX_MEM_alu_result <= EX_alu_result;
-					EX_MEM_ReadData2  <= ID_EX_ReadData2;
-					EX_MEM_rd         <= ID_EX_rd;
+            mem_alu_result <= alu_result;
+            mem_write_data <= ex_read_data2;
+            mem_rd         <= ex_rd;
+        end
+    end
+
+		// Etapa MEM (MEMORY)
+    assign daddr   = mem_alu_result;
+    assign ddata_w = mem_write_data;
+    assign d_w     = mem_MemWrite;
+    assign d_r     = mem_MemRead;
+
+    // registro MEM / WB
+    always_ff @(posedge clk or negedge reset) begin
+        if (!reset) begin
+            wb_RegWrite <= 0; wb_MemtoReg <= 0;
+            wb_read_data <= 0; wb_alu_result <= 0; wb_rd <= 0;
+        end else begin
+            wb_RegWrite  <= mem_RegWrite;
+            wb_MemtoReg  <= mem_MemtoReg;
             
-					EX_MEM_MemRead    <= ID_EX_MemRead;
-					EX_MEM_MemtoReg   <= ID_EX_MemtoReg;
-					EX_MEM_MemWrite   <= ID_EX_MemWrite;
-					EX_MEM_RegWrite   <= ID_EX_RegWrite;
-				end
-		end
-		
-		// Etapa MEM
-	assign daddr   = EX_MEM_alu_result;
-	assign ddata_w = EX_MEM_ReadData2;
-	assign d_w     = EX_MEM_MemWrite;
-	assign d_r     = EX_MEM_MemRead;
-	
-	always_ff @(posedge clk or negedge reset) 
-		begin
-			if (!reset) 
-				begin	
-					MEM_WB_alu_result <= 32'b0;
-					MEM_WB_ddata_r    <= 32'b0;
-					MEM_WB_rd         <= 5'b0;
-					MEM_WB_MemtoReg   <= 1'b0;
-					MEM_WB_RegWrite   <= 1'b0;
-				end 
-			else 
-				begin
-					MEM_WB_alu_result <= EX_MEM_alu_result;
-					MEM_WB_ddata_r    <= ddata_r;
-					MEM_WB_rd         <= EX_MEM_rd;
-					MEM_WB_MemtoReg   <= EX_MEM_MemtoReg;
-					MEM_WB_RegWrite   <= EX_MEM_RegWrite;
-				end
-		end
-		
-	assign WB_out_mux4 = MEM_WB_MemtoReg ? MEM_WB_ddata_r : MEM_WB_alu_result;
-	assign WB_RegWrite = MEM_WB_RegWrite;
-	assign WB_WriteRegister = MEM_WB_rd
-	assign reg_write_en = WB_RegWrite;
-	
- endmodule 
- 
- 
- 
+            wb_read_data <= ddata_r;
+            wb_alu_result<= mem_alu_result;
+            wb_rd        <= mem_rd;
+        end
+    end
+
+		// Etapa WB
+    assign wb_final_data = (wb_MemtoReg) ? wb_read_data : wb_alu_result;
+    assign reg_write_en  = wb_RegWrite;
+
+endmodule
  
