@@ -41,7 +41,7 @@ blt_true:
    	#USO DE BLTU
     la x3, result4
     sw x0, 0(x3) #inicia en 0
-    blt x1, x2, bltu_true #igual que blt pero unsigned
+    bltu x1, x2, bltu_true #igual que blt pero unsigned
     nop
 bltu_true:
 	li x4, 1
@@ -59,7 +59,7 @@ bge_true:
     #USO DE BGEU
     la x3, result6
     sw x0, 0(x3)
-    bge x1, x2, bgeu_true #igual que bge pero unsigned
+    bgeu x1, x2, bgeu_true #igual que bge pero unsigned
     nop
 bgeu_true:
 	li x4, 1
@@ -83,3 +83,4 @@ func_jalr:
     sw x4, 0(x5) #guarda en result2
     jalr x0, x1, 0 #vuelve al main
     nop
+
