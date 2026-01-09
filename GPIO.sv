@@ -35,34 +35,37 @@ begin
 	end
 	
 	else
+	
 	begin
 	if (wr_en)
-	begin
-		registros [addr] <= data_in;
-	end
+		begin
+			registros [addr] <= data_in;
+		end
+		
+		button_reg <= botones;
+		button_reg2 <= button_reg;
+		button_reg3 <= button_reg2;
+		
 	
-	button_reg <= botones;
-	button_reg2 <= button_reg;
-	button_reg3 <= button_reg2;
-	
-	
-	for (integrer i = 0; i <4; i = i = 1)
-		if (pulso_button_reg [i])
-			registro [0][1] <= 1'b1;
+		for (integer i = 0; i <4; i =+ 1)
+			if (pulso_button_reg [i])
+				registros [0][i] <= 1'b1;
 			
-	if (rd_en) 
-	begin
-		data_out <= registros [addr];
+		if (rd_en) 
+		begin
+			data_out <= registros [addr];
+		end
 	end
 end
 	
 assign hex0 = registros [2] [7:0];
 assign hex1 = registros [3] [7:0];
-assign leds_rojos = registro [1] [17:0];
+assign leds_rojos = registros [1] [17:0];
 assign leds_botones = registros [0] [3:'0];
 
 assign pulso_button_reg = ~button_reg2 & button_reg3;
 
 endmodule 
+	
 	
 	
