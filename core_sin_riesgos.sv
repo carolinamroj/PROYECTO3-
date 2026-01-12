@@ -1,4 +1,3 @@
-
  module core_sin_riesgos(
 	input logic clk,
 	input logic reset,
@@ -220,6 +219,9 @@
 			
 		if (wb_RegWrite && (wb_rd != 0) && !(mem_RegWrite && (mem_rd != 0) && (mem_rd == ex_rs2)) && (wb_rd == ex_rs2))
 			forward2 = 2'b01;
+			
+		if (ex_ALUSrc) 
+            forward2 = 2'b00;
 	end
 
 	// ETAPA EX 
@@ -237,8 +239,10 @@
 		else if (ex_AuipcLui == 2'b10) // AUIPC
 			alu_src1_base = ex_pc;
 		else
+		begin
 			alu_src1_base = ex_read_data1;
 			alu_src2_base = ex_ALUSrc ? ex_imm : ex_read_data2;
+		end
 	end
  
  always_comb
@@ -322,4 +326,3 @@
  assign reg_write_en  = wb_RegWrite;
 
  endmodule 
- 
