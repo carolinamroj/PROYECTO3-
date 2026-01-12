@@ -1,12 +1,11 @@
-
 `timescale 1ns / 1ps
 
  module tb_sin_riesgos;
  
 	logic CLK;
 	logic RESET_N;
-	localparam ficheroram = "DATATEXT.txt";
-	localparam ficherorom = "programainst2.txt";
+	localparam ficheroram = "DATA.txt";
+	localparam ficherorom = "FIBONACCI.txt";
 	
 	pipelined_sin_riesgos # (.ficheroram(ficheroram), .ficherorom(ficherorom)) uut (
 	.CLK(CLK),
