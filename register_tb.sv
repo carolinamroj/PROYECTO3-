@@ -65,10 +65,11 @@
 			$display("Registro 0: %h (debe ser 0)", ReadData1);
 			
 			$display("Test completado");
-			$finish;
+			$stop;
 		end
 		
 	endmodule 
+
 
 
 
